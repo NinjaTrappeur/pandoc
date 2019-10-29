@@ -517,12 +517,13 @@ List of all DocBook tags, with [x] indicating implemented,
 
 type DB m = StateT DBState m
 
-data DBState = DBState{ dbSectionLevel :: Int
-                      , dbQuoteType    :: QuoteType
-                      , dbMeta         :: Meta
-                      , dbBook         :: Bool
-                      , dbFigureTitle  :: Inlines
-                      , dbContent      :: [Content]
+data DBState = DBState{ dbSectionLevel       :: Int
+                      , dbQuoteType          :: QuoteType
+                      , dbMeta               :: Meta
+                      , dbBook               :: Bool
+                      , dbFigureTitle        :: Inlines
+                      , dbContent            :: [Content]
+                      , dbCurrentLvlHasTitle :: Bool
                       } deriving Show
 
 instance Default DBState where
@@ -531,7 +532,8 @@ instance Default DBState where
                , dbMeta = mempty
                , dbBook = False
                , dbFigureTitle = mempty
-               , dbContent = [] }
+               , dbContent = [],
+               , dbCurrentLvlHasTitle  = False}
 
 
 readDocBook :: PandocMonad m => ReaderOptions -> Text -> m Pandoc
@@ -735,7 +737,9 @@ parseBlock (Elem e) =
         "sect3" -> sect 3
         "sect4" -> sect 4
         "sect5" -> sect 5
-        "section" -> gets dbSectionLevel >>= sect . (+1)
+        "section" -> gets dbCurrentLevelHasTitle >>=
+                     switch when (gets dbSectionLevel) >>=
+                     sect . (+1)
         "refsect1" -> sect 1
         "refsect2" -> sect 2
         "refsect3" -> sect 3
@@ -796,7 +800,7 @@ parseBlock (Elem e) =
         "screen" -> codeBlockWithLang
         "programlisting" -> codeBlockWithLang
         "?xml"  -> return mempty
-        "title" -> return mempty     -- handled in parent element
+        "title" -> modify (\st -> st{ dbCurrentLevelHasTitle = True}) >> return mempty
         "subtitle" -> return mempty  -- handled in parent element
         _       -> skip >> getBlocks e
    where skip = do
